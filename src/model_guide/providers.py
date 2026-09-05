@@ -42,7 +42,7 @@ class StdlibTransport:
                 return response.status, dict(response.headers), json.loads(response.read())
         except urllib.error.HTTPError as exc:
             return exc.code, {}, {}
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError, UnicodeError, RecursionError) as exc:
             raise ProviderError("provider transport failed") from exc
 
 

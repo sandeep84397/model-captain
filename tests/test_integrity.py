@@ -21,6 +21,22 @@ def fixture(repetitions=1):
 
 
 class IntegrityTests(unittest.TestCase):
+    def test_report_builder_refuses_incomplete_matrix(self):
+        from model_guide.cli import bundled_suite
+        candidate = {"id": "a", "provider": "openai", "model": "example"}
+        with self.assertRaises(ValidationError): build_report(bundled_suite(), [candidate], 1, [], "live")
+
+    def test_large_json_integer_and_deep_output_do_not_crash_grading(self):
+        self.assertTrue(grade(str(10**400), "exact", 10**400))
+        self.assertFalse(grade("[" * 2000 + "0" + "]" * 2000, "exact", 0))
+
+    def test_oversized_numeric_metric_is_validation_error(self):
+        config = {"version": 1, "candidates": [{"id": "example", "provider": "openai", "model": "example",
+            "prices": {"as_of": "2026-09-05", "input_per_million": 10**400, "output_per_million": 1}}]}
+        with self.assertRaises(ValidationError): validate_config(config)
+        report = fixture(); report["attempts"][0]["latency_ms"] = 10**400
+        with self.assertRaises(ValidationError): validate_report(report)
+
     def test_candidate_rejects_secret_fields(self):
         config = {"version": 1, "candidates": [{"id": "example",
             "provider": "openai", "model": "example", "api_key": "secret"}]}

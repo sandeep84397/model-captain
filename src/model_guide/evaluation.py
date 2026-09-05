@@ -36,13 +36,19 @@ def _enum(value, allowed, label):
 def _finite_number(value, label, allow_none=False):
     if value is None and allow_none:
         return
-    if type(value) not in (int, float) or isinstance(value, bool) or not math.isfinite(value) or value < 0:
+    try:
+        valid = type(value) in (int, float) and math.isfinite(value) and value >= 0
+    except OverflowError:
+        valid = False
+    if not valid:
         raise ValidationError(f"{label} must be a finite nonnegative number")
 
 def _json_value(value):
     if value is None or type(value) is bool or isinstance(value, str):
         return True
-    if type(value) in (int, float):
+    if type(value) is int:
+        return True
+    if type(value) is float:
         return math.isfinite(value)
     if isinstance(value, list):
         return all(_json_value(item) for item in value)
@@ -62,11 +68,13 @@ def _subset(actual, expected):
     return _strict_equal(actual, expected)
 
 def grade(text, grader, expected):
-    try: actual = json.loads(text)
-    except (TypeError, json.JSONDecodeError): return False
-    if grader not in ("exact", "json_subset") or not _json_value(actual) or not _json_value(expected):
+    try:
+        actual = json.loads(text)
+        if grader not in ("exact", "json_subset") or not _json_value(actual) or not _json_value(expected):
+            return False
+        return _strict_equal(actual, expected) if grader == "exact" else _subset(actual, expected)
+    except (TypeError, ValueError, RecursionError, OverflowError):
         return False
-    return _strict_equal(actual, expected) if grader == "exact" else _subset(actual, expected)
 
 def validate_suite(suite):
     if not isinstance(suite, dict) or set(suite) != {"version", "tasks"} or type(suite.get("version")) is not int or suite["version"] != 1: raise ValidationError("suite requires version 1")
@@ -122,7 +130,7 @@ def build_report(suite, candidates, repetitions, attempts, mode):
     if type(repetitions) is not int or not 1 <= repetitions <= 10: raise ValidationError("repetitions must be 1..10")
     if mode not in {"live", "synthetic"}: raise ValidationError("invalid report mode")
     planned_calls = len(candidates) * len(suite["tasks"]) * repetitions
-    return {
+    report = {
         "schema_version": 1, "run_id": str(uuid.uuid4()), "created_at": int(time.time()),
         "suite_hash": suite_hash(suite), "suite_version": suite["version"],
         "tasks": [{"id": task["id"], "category": task["category"]} for task in suite["tasks"]],
