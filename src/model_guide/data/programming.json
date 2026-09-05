@@ -1,0 +1,11 @@
+{"version":1,"tasks":[
+ {"id":"debug-1","category":"debugging","prompt":"Return JSON true: Does `if x == 0` execute when x is zero?","grader":"exact","expected":true},
+ {"id":"debug-2","category":"debugging","prompt":"Return JSON true: Is `None` equal to `None` in Python?","grader":"exact","expected":true},
+ {"id":"debug-3","category":"debugging","prompt":"Return JSON false: Does list index 3 exist in [1,2,3]?","grader":"exact","expected":false},
+ {"id":"review-1","category":"code-review","prompt":"Return JSON {\"risk\":\"sql-injection\"}: SQL concatenation with user input risk.","grader":"json_subset","expected":{"risk":"sql-injection"}},
+ {"id":"review-2","category":"code-review","prompt":"Return JSON {\"risk\":\"missing-auth\"}: Endpoint reads private records without auth.","grader":"json_subset","expected":{"risk":"missing-auth"}},
+ {"id":"review-3","category":"code-review","prompt":"Return JSON {\"risk\":\"secret-log\"}: Password written to log.","grader":"json_subset","expected":{"risk":"secret-log"}},
+ {"id":"test-1","category":"testing","prompt":"Return JSON {\"test\":\"empty-input\"}: Test name for rejecting empty input.","grader":"json_subset","expected":{"test":"empty-input"}},
+ {"id":"test-2","category":"testing","prompt":"Return JSON {\"test\":\"boundary-zero\"}: Test name for zero boundary.","grader":"json_subset","expected":{"test":"boundary-zero"}},
+ {"id":"test-3","category":"testing","prompt":"Return JSON {\"test\":\"duplicate-id\"}: Test name for duplicate identifier rejection.","grader":"json_subset","expected":{"test":"duplicate-id"}}
+]}
