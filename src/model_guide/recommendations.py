@@ -12,12 +12,12 @@ def recommend(report, category, task_text):
     if report["mode"] == "synthetic": raise RecommendationError("demo results are demonstration-only")
     if report["completion_status"] != "complete": raise RecommendationError("run is incomplete")
     attempts=report["attempts"]
-    categories = {task["category"] for task in report["task_manifest"]["tasks"]}
+    categories = {task["category"] for task in report["tasks"]}
     if category not in categories: raise RecommendationError("no eligible attempts for category")
     mismatched = {row["candidate_id"] for row in attempts if row["requested_model"] != row["returned_model"]}
     by=defaultdict(list)
     for a in attempts:
-        if a["category"] == category and a["success"] and a["candidate_id"] not in mismatched:
+        if a["category"] == category and a["candidate_id"] not in mismatched:
             by[a["candidate_id"]].append(a)
     eligible=[]
     for candidate in report["candidates"]:

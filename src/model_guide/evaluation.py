@@ -3,11 +3,16 @@ import json
 import math
 import time
 import uuid
+from copy import deepcopy
+from datetime import date
 
 _ID_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
 _CATEGORIES = {"debugging", "code-review", "testing"}
 _PROVIDERS = {"demo", "openai", "anthropic"}
-_EFFORTS = {"low", "medium", "high", "xhigh"}
+_EFFORTS = {
+    "openai": {"none", "minimal", "low", "medium", "high", "xhigh", "max"},
+    "anthropic": {"low", "medium", "high", "xhigh", "max"},
+}
 
 class ValidationError(ValueError): pass
 
@@ -34,6 +39,17 @@ def _finite_number(value, label, allow_none=False):
     if type(value) not in (int, float) or isinstance(value, bool) or not math.isfinite(value) or value < 0:
         raise ValidationError(f"{label} must be a finite nonnegative number")
 
+def _json_value(value):
+    if value is None or type(value) is bool or isinstance(value, str):
+        return True
+    if type(value) in (int, float):
+        return math.isfinite(value)
+    if isinstance(value, list):
+        return all(_json_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(isinstance(key, str) and _json_value(item) for key, item in value.items())
+    return False
+
 def _positive_int(value, label, allow_none=False):
     if value is None and allow_none:
         return
@@ -48,6 +64,8 @@ def _subset(actual, expected):
 def grade(text, grader, expected):
     try: actual = json.loads(text)
     except (TypeError, json.JSONDecodeError): return False
+    if grader not in ("exact", "json_subset") or not _json_value(actual) or not _json_value(expected):
+        return False
     return _strict_equal(actual, expected) if grader == "exact" else _subset(actual, expected)
 
 def validate_suite(suite):
@@ -61,7 +79,7 @@ def validate_suite(suite):
         if task["id"] in ids: raise ValidationError("task IDs must be unique")
         ids.add(task["id"]); prompt=task.get("prompt"); grader=task.get("grader")
         _enum(task.get("category"), _CATEGORIES, "task category")
-        if not isinstance(prompt,str) or len(prompt.encode())>16384 or grader not in ("exact","json_subset"): raise ValidationError("invalid task")
+        if not isinstance(prompt,str) or not prompt.strip() or len(prompt.encode())>16384 or grader not in ("exact","json_subset") or not _json_value(task["expected"]): raise ValidationError("invalid task")
         total += len(prompt.encode())
     if total>1048576: raise ValidationError("suite prompts exceed 1 MiB")
     return suite
@@ -71,59 +89,68 @@ def validate_config(config):
     candidates=config.get("candidates")
     if not isinstance(candidates,list) or not candidates or len(candidates)>16: raise ValidationError("config needs 1..16 candidates")
     ids=set()
+    normalized = []
     for c in candidates:
         if not isinstance(c,dict) or set(c) - {"id", "provider", "model", "max_output_tokens", "effort", "prices"}: raise ValidationError("invalid candidate fields")
         _identifier(c.get("id"), "candidate ID")
         if c["id"] in ids: raise ValidationError("candidate IDs must be unique")
         ids.add(c["id"])
         _enum(c.get("provider"), _PROVIDERS, "candidate provider")
-        if not isinstance(c.get("model"),str) or not c["model"] or len(c["model"]) > 256: raise ValidationError("invalid candidate provider/model")
+        _identifier(c.get("model"), "model ID")
         cap=c.get("max_output_tokens",1024)
         if type(cap) is not int or not 1<=cap<=32768: raise ValidationError("max_output_tokens must be 1..32768")
-        if "effort" in c and (not isinstance(c["effort"], str) or c["effort"] not in _EFFORTS): raise ValidationError("invalid native API effort")
+        if "effort" in c:
+            if c["provider"] == "demo" or not isinstance(c["effort"], str) or c["effort"] not in _EFFORTS[c["provider"]]: raise ValidationError("invalid native API effort")
         if "prices" in c:
             prices=c["prices"]
             if not isinstance(prices,dict) or set(prices) != {"as_of", "input_per_million", "output_per_million"}: raise ValidationError("invalid prices metadata")
-            if not isinstance(prices["as_of"], str) or len(prices["as_of"]) != 10 or prices["as_of"][4:5] != "-" or prices["as_of"][7:8] != "-": raise ValidationError("prices as_of must be YYYY-MM-DD")
+            if not isinstance(prices["as_of"], str): raise ValidationError("prices as_of must be YYYY-MM-DD")
+            try: date.fromisoformat(prices["as_of"])
+            except ValueError as exc: raise ValidationError("prices as_of must be YYYY-MM-DD") from exc
             _finite_number(prices["input_per_million"], "input_per_million")
             _finite_number(prices["output_per_million"], "output_per_million")
-    return config
+        candidate = deepcopy(c)
+        candidate["max_output_tokens"] = cap
+        normalized.append(candidate)
+    return {"version": 1, "candidates": normalized}
 
 def suite_hash(suite): return hashlib.sha256(json.dumps(suite,sort_keys=True,separators=(",",":")).encode()).hexdigest()
 
 def build_report(suite, candidates, repetitions, attempts, mode):
-    validate_suite(suite)
-    validate_config({"version": 1, "candidates": candidates})
+    suite = deepcopy(validate_suite(suite))
+    candidates = validate_config({"version": 1, "candidates": candidates})["candidates"]
     if type(repetitions) is not int or not 1 <= repetitions <= 10: raise ValidationError("repetitions must be 1..10")
     if mode not in {"live", "synthetic"}: raise ValidationError("invalid report mode")
     planned_calls = len(candidates) * len(suite["tasks"]) * repetitions
     return {
         "schema_version": 1, "run_id": str(uuid.uuid4()), "created_at": int(time.time()),
-        "suite_hash": suite_hash(suite), "suite_version": suite["version"], "task_manifest": {
-            "tasks": [{"id": task["id"], "category": task["category"]} for task in suite["tasks"]]},
+        "suite_hash": suite_hash(suite), "suite_version": suite["version"],
+        "tasks": [{"id": task["id"], "category": task["category"]} for task in suite["tasks"]],
         "candidates": candidates, "repetitions": repetitions, "planned_calls": planned_calls,
         "generated_token_ceiling": sum(candidate.get("max_output_tokens", 1024) for candidate in candidates) * len(suite["tasks"]) * repetitions,
         "completion_status": "complete", "mode": mode,
         "provenance": {"kind": "synthetic-demo" if mode == "synthetic" else "live-api"},
-        "attempts": attempts,
+        "attempts": deepcopy(attempts),
     }
+    validate_report(report)
+    return deepcopy(report)
 
 def validate_report(report):
-    required = {"schema_version", "run_id", "created_at", "suite_hash", "suite_version", "task_manifest", "candidates", "repetitions", "planned_calls", "generated_token_ceiling", "completion_status", "mode", "provenance", "attempts"}
+    required = {"schema_version", "run_id", "created_at", "suite_hash", "suite_version", "tasks", "candidates", "repetitions", "planned_calls", "generated_token_ceiling", "completion_status", "mode", "provenance", "attempts"}
     if not isinstance(report, dict) or set(report) != required: raise ValidationError("invalid report fields")
     if type(report["schema_version"]) is not int or report["schema_version"] != 1 or type(report["suite_version"]) is not int or report["suite_version"] != 1: raise ValidationError("unsupported report schema")
     if not isinstance(report["run_id"], str) or not report["run_id"] or type(report["created_at"]) is not int or report["created_at"] < 0: raise ValidationError("invalid report identity")
     if not isinstance(report["suite_hash"], str) or len(report["suite_hash"]) != 64 or any(char not in "0123456789abcdef" for char in report["suite_hash"]): raise ValidationError("invalid suite hash")
-    manifest = report["task_manifest"]
-    if not isinstance(manifest, dict) or set(manifest) != {"tasks"} or not isinstance(manifest["tasks"], list) or not manifest["tasks"] or len(manifest["tasks"]) > 100: raise ValidationError("invalid task manifest")
+    if not isinstance(report["tasks"], list) or not report["tasks"] or len(report["tasks"]) > 100: raise ValidationError("invalid report tasks")
     tasks = {}
-    for task in manifest["tasks"]:
+    for task in report["tasks"]:
         if not isinstance(task, dict) or set(task) != {"id", "category"}: raise ValidationError("invalid task manifest entry")
         _identifier(task.get("id"), "task ID")
         _enum(task["category"], _CATEGORIES, "task category")
         if task["id"] in tasks: raise ValidationError("invalid task manifest entry")
         tasks[task["id"]] = task["category"]
-    validate_config({"version": 1, "candidates": report["candidates"]})
+    normalized = validate_config({"version": 1, "candidates": report["candidates"]})
+    if normalized["candidates"] != report["candidates"]: raise ValidationError("report candidates are not normalized")
     candidates = {candidate["id"]: candidate for candidate in report["candidates"]}
     if type(report["repetitions"]) is not int or not 1 <= report["repetitions"] <= 10: raise ValidationError("invalid repetitions")
     expected_calls = len(tasks) * len(candidates) * report["repetitions"]
@@ -134,22 +161,23 @@ def validate_report(report):
     _enum(report["mode"], {"live", "synthetic"}, "report mode")
     if not isinstance(report["provenance"], dict) or set(report["provenance"]) != {"kind"} or report["provenance"]["kind"] != ("synthetic-demo" if report["mode"] == "synthetic" else "live-api"): raise ValidationError("invalid report provenance")
     providers = {candidate["provider"] for candidate in candidates.values()}
-    if (report["mode"] == "synthetic") != (providers == {"demo"}): raise ValidationError("mode and candidate provenance disagree")
+    if (report["mode"] == "synthetic" and providers != {"demo"}) or (report["mode"] == "live" and "demo" in providers): raise ValidationError("mode and candidate provenance disagree")
     if not isinstance(report["attempts"], list): raise ValidationError("invalid attempts")
     seen = set()
     for attempt in report["attempts"]:
-        _validate_attempt(attempt, candidates, tasks, seen)
-    if report["completion_status"] == "complete" and len(seen) != expected_calls: raise ValidationError("report has incomplete attempt matrix")
+        _validate_attempt(attempt, candidates, tasks, report["repetitions"], seen)
+    expected_tuples = {(candidate_id, task_id, repetition) for candidate_id in candidates for task_id in tasks for repetition in range(1, report["repetitions"] + 1)}
+    if report["completion_status"] == "complete" and seen != expected_tuples: raise ValidationError("report has incomplete attempt matrix")
     return report
 
-def _validate_attempt(attempt, candidates, tasks, seen):
+def _validate_attempt(attempt, candidates, tasks, repetitions, seen):
     required = {"candidate_id", "task_id", "category", "repetition", "success", "passed", "latency_ms", "input_tokens", "output_tokens", "cost_usd", "requested_model", "returned_model"}
     if not isinstance(attempt, dict) or set(attempt) - (required | {"error"}) or not required <= set(attempt): raise ValidationError("invalid attempt fields")
     candidate_id, task_id = attempt["candidate_id"], attempt["task_id"]
     _identifier(candidate_id, "candidate ID")
     _identifier(task_id, "task ID")
     if candidate_id not in candidates or task_id not in tasks or attempt["category"] != tasks[task_id]: raise ValidationError("attempt does not match report manifest")
-    if type(attempt["repetition"]) is not int or not 1 <= attempt["repetition"] <= 10: raise ValidationError("invalid attempt repetition")
+    if type(attempt["repetition"]) is not int or not 1 <= attempt["repetition"] <= repetitions: raise ValidationError("invalid attempt repetition")
     key = (candidate_id, task_id, attempt["repetition"])
     if key in seen: raise ValidationError("duplicate attempt")
     seen.add(key)
