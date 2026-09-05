@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: python -m pip install .
+      - name: Behavioral tests
+        run: python -m unittest discover -s tests -v
+      - name: Installed CLI smoke without API keys
+        shell: bash
+        run: |
+          smoke_dir="$(mktemp -d)"
+          cd "$smoke_dir"
+          model-captain --help
+          model-captain init
+          model-captain evaluate --provider demo --output results/demo.json
+          model-captain report --input results/demo.json
+          model-captain export --input results/demo.json --format agents-md --output results/AGENTS.md
+          model-captain export --input results/demo.json --format claude-md --output results/CLAUDE.md
+          set +e
+          model-captain recommend --input results/demo.json --category debugging --task 'Diagnose a race condition'
+          status=$?
+          set -e
+          test "$status" -eq 2
