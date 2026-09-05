@@ -84,7 +84,7 @@ model-captain export --input results/comparison.json --format agents-md --output
 model-captain export --input results/comparison.json --format claude-md --output results/CLAUDE.md
 ```
 
-These commands make no model calls. Advice requires comparable complete coverage and verified model identity. The pilot threshold is at least 3 distinct tasks and 0.8 quality; this is **not** a confidence or safety guarantee. Unknown cost stays unknown. A shortlist can be more appropriate than a single candidate.
+These commands make no model calls. Advice requires comparable complete coverage and verified model identity. The pilot threshold is at least 3 distinct tasks and 0.8 quality; this is **not** a confidence or safety guarantee. Monetary cost calculation is not implemented yet: cost stays unknown, even if pricing metadata is supplied. A shortlist can be more appropriate than a single candidate.
 
 Instructions do not change your app's active model or grant autonomous permissions. `--task` supplies prompt text, not a validated classifier. Model-produced text is never executed or promoted into exported instructions.
 

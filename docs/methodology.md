@@ -10,7 +10,7 @@ The comparison unit includes provider, requested model, returned model identity 
 
 Advice is provisional and limited to the evaluated category and configuration. Each candidate must have the same completed task/repetition coverage and meet the stated quality threshold. Repeating one task does not produce more unique tasks. Synthetic demo records cannot justify a live-model recommendation.
 
-When all compared costs are known from supplied prices and reported usage, cost-based advice must identify those prices as estimates. Otherwise the tool must disclose unknown cost and make no savings claim. Errors and failed outputs remain part of the evaluation. No hidden retries or removal of failed attempts.
+The alpha records provider-reported usage but does not compute monetary costs; pricing metadata, when supplied, is not a billing calculation. Cost remains unknown and no savings claim is made. Future cost-based advice must identify supplied prices as estimates and account for cache pricing and failed calls. Errors and failed outputs remain part of the evaluation. No hidden retries or removal of failed attempts.
 
 The included public microtasks are practice tests. They are not a private holdout, contamination-resistant benchmark or calibrated certification. Small observed differences are not proof of superiority. Even a perfect score is provisional evidence only. Architecture and autonomous implementation recommendations need stronger future task packs and validation.
 
