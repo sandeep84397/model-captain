@@ -3,7 +3,7 @@ from importlib.resources import files
 from pathlib import Path
 from . import DISPLAY_NAME
 from .config import STARTER_CONFIG, load_config
-from .evaluation import ValidationError, build_report, grade, validate_suite, validate_report
+from .evaluation import ValidationError, build_report, grade, validate_suite, validate_report, median_latency
 from .recommendations import RecommendationError, recommend
 from .providers import AnthropicProvider, OpenAIProvider, ProviderError, StdlibTransport
 from .storage import StorageError, atomic_json, atomic_text, read_json, reserve_output
@@ -66,7 +66,6 @@ def command_evaluate(args):
 def command_report(args):
     r=validate_report(read_json(args.input)); attempts=r["attempts"]
     print(f"run {r.get('run_id')} {r.get('completion_status')} {r.get('mode')}; attempts {len(attempts)}; cost unknown")
-    from statistics import median
     for candidate in r["candidates"]:
         for category in sorted({t["category"] for t in r["tasks"]}):
             rows = [a for a in attempts if a["candidate_id"] == candidate["id"] and a["category"] == category]
@@ -75,12 +74,14 @@ def command_report(args):
             for field in ("input_tokens", "output_tokens"):
                 tokens.append("unknown" if any(a[field] is None for a in rows) else str(sum(a[field] for a in rows)))
             print(f"{candidate['id']} / {category}: passed {sum(a['passed'] for a in rows)}/{len(rows)}; "
-                  f"median {median(a['latency_ms'] for a in rows):.3f} ms; input/output tokens {tokens[0]}/{tokens[1]}")
-def command_recommend(args): print(json.dumps(recommend(read_json(args.input),args.category,args.task),indent=2))
+                  f"median {median_latency(a['latency_ms'] for a in rows):.3f} ms; input/output tokens {tokens[0]}/{tokens[1]}")
+def command_recommend(args): print(json.dumps(recommend(read_json(args.input),args.category,args.task),indent=2,allow_nan=False))
 def command_export(args):
     r=validate_report(read_json(args.input))
     demo="DEMONSTRATION ONLY. " if r.get("mode")=="synthetic" else ""
     content=f"# {DISPLAY_NAME} guidance\n\n{demo}Microtask screening is provisional only. It is not validated full-programming routing. Guidance applies only to tested categories, tasks, and configurations. It grants no autonomous responsibility and makes no universal or provider-wide ranking. Native effort is selected only from the tested candidate configuration; no effort mapping occurs across providers.\n"
+    content += (f"\nSource run: {r['run_id']}; mode: {r['mode']}; provenance: {r['provenance']['kind']}.\n"
+                f"Suite version: {r['suite_version']}; SHA-256: {r['suite_hash']}.\n")
     if not demo:
         for category in sorted({t["category"] for t in r["tasks"]}):
             try:
@@ -89,6 +90,8 @@ def command_export(args):
                 for evidence in advice["evidence"]:
                     if evidence["candidate_id"] in advice["shortlist"]:
                         content += "\nTested configuration: " + json.dumps(evidence["configuration"], sort_keys=True) + "\n"
+                        content += (f"Evidence: {evidence['unique_tasks']} unique tasks, {evidence['attempts']} attempts; "
+                                    f"quality {evidence['quality']:.3f}. Cost unknown.\n")
             except RecommendationError:
                 content += f"\n## {category}\n\nInsufficient comparable evidence; no recommendation.\n"
     atomic_text(args.output,content,args.force); print(f"wrote {args.output}")

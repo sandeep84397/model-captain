@@ -21,6 +21,19 @@ def fixture(repetitions=1):
 
 
 class IntegrityTests(unittest.TestCase):
+    def test_even_count_large_latencies_and_advice_provenance(self):
+        report = fixture(2)
+        for attempt in report["attempts"]: attempt["latency_ms"] = 1e308
+        advice = recommend(report, "debugging", "fix")
+        self.assertEqual(advice["evidence"][0]["median_latency_ms"], 1e308)
+        self.assertEqual(advice["provenance"]["run_id"], report["run_id"])
+        self.assertEqual(advice["provenance"]["suite_hash"], report["suite_hash"])
+
+    def test_success_requires_safe_returned_identity(self):
+        for model in (None, "", "unsafe\nmodel"):
+            report = fixture(); report["attempts"][0]["returned_model"] = model
+            with self.assertRaises(ValidationError): validate_report(report)
+
     def test_report_builder_refuses_incomplete_matrix(self):
         from model_guide.cli import bundled_suite
         candidate = {"id": "a", "provider": "openai", "model": "example"}

@@ -16,6 +16,14 @@ _EFFORTS = {
 
 class ValidationError(ValueError): pass
 
+def median_latency(values):
+    """Median for validated nonnegative values without overflowing the midpoint."""
+    ordered = sorted(values)
+    if not ordered: raise ValidationError("latency observations required")
+    middle = len(ordered) // 2
+    if len(ordered) % 2: return ordered[middle]
+    return ordered[middle - 1] / 2 + ordered[middle] / 2
+
 def _strict_equal(left, right):
     if type(left) is not type(right):
         return False
@@ -148,6 +156,7 @@ def validate_report(report):
     if not isinstance(report, dict) or set(report) != required: raise ValidationError("invalid report fields")
     if type(report["schema_version"]) is not int or report["schema_version"] != 1 or type(report["suite_version"]) is not int or report["suite_version"] != 1: raise ValidationError("unsupported report schema")
     if not isinstance(report["run_id"], str) or not report["run_id"] or type(report["created_at"]) is not int or report["created_at"] < 0: raise ValidationError("invalid report identity")
+    _identifier(report["run_id"], "run ID")
     if not isinstance(report["suite_hash"], str) or len(report["suite_hash"]) != 64 or any(char not in "0123456789abcdef" for char in report["suite_hash"]): raise ValidationError("invalid suite hash")
     if not isinstance(report["tasks"], list) or not report["tasks"] or len(report["tasks"]) > 100: raise ValidationError("invalid report tasks")
     tasks = {}
@@ -190,7 +199,12 @@ def _validate_attempt(attempt, candidates, tasks, repetitions, seen):
     if key in seen: raise ValidationError("duplicate attempt")
     seen.add(key)
     if type(attempt["success"]) is not bool or type(attempt["passed"]) is not bool or attempt["requested_model"] != candidates[candidate_id]["model"]: raise ValidationError("invalid attempt result")
-    if attempt["returned_model"] is not None and not isinstance(attempt["returned_model"], str): raise ValidationError("invalid returned model")
+    returned_model = attempt["returned_model"]
+    if returned_model is None:
+        if attempt["success"]: raise ValidationError("successful attempt requires returned model identity")
+    elif (not isinstance(returned_model, str) or not 1 <= len(returned_model) <= 256
+          or any(char not in _ID_CHARS | {":", "/"} for char in returned_model)):
+        raise ValidationError("invalid returned model")
     _finite_number(attempt["latency_ms"], "latency_ms")
     _positive_int(attempt["input_tokens"], "input_tokens", allow_none=True)
     _positive_int(attempt["output_tokens"], "output_tokens", allow_none=True)

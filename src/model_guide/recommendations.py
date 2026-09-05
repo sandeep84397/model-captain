@@ -1,6 +1,5 @@
 from collections import defaultdict
-from statistics import median
-from .evaluation import ValidationError, validate_report
+from .evaluation import ValidationError, validate_report, median_latency as median
 
 class RecommendationError(ValueError): pass
 
@@ -37,4 +36,7 @@ def recommend(report, category, task_text):
         selected = [entry for entry in eligible if entry[4] == fastest]
         basis = "lowest observed median in this run"
     candidates = {candidate["id"]: candidate for candidate in report["candidates"]}
-    return {"status":"provisional","category":category,"task":task_text,"selection_basis":basis,"shortlist":[x[0] for x in selected],"evidence":[{"candidate_id":x[0],"configuration":candidates[x[0]],"quality":x[1],"unique_tasks":x[2],"attempts":x[3],"median_latency_ms":x[4]} for x in selected],"prompt":f"Solve only this {category} microtask. Return required JSON only: {task_text}"}
+    provenance = {"run_id": report["run_id"], "suite_hash": report["suite_hash"],
+                  "suite_version": report["suite_version"], "mode": report["mode"],
+                  "kind": report["provenance"]["kind"]}
+    return {"status":"provisional","category":category,"task":task_text,"provenance":provenance,"selection_basis":basis,"shortlist":[x[0] for x in selected],"evidence":[{"candidate_id":x[0],"configuration":candidates[x[0]],"quality":x[1],"unique_tasks":x[2],"attempts":x[3],"median_latency_ms":x[4]} for x in selected],"prompt":f"Solve only this {category} microtask. Return required JSON only: {task_text}"}

@@ -90,3 +90,8 @@ class PreflightTests(unittest.TestCase):
             self.assertEqual(main(["export", "--input", report, "--format", "agents-md", "--output", str(exported)]), 0)
             self.assertIn('"model": "example"', exported.read_text())
             self.assertIn("debugging", exported.read_text())
+            run = json.loads(Path(report).read_text())
+            self.assertIn(run["run_id"], exported.read_text())
+            self.assertIn(run["suite_hash"], exported.read_text())
+            self.assertIn("3 unique tasks", exported.read_text())
+            self.assertIn("3 attempts", exported.read_text())
