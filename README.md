@@ -86,11 +86,17 @@ model-captain export --input results/comparison.json --format claude-md --output
 
 These commands make no model calls. Advice requires comparable complete coverage and verified model identity. The pilot threshold is at least 3 distinct tasks and 0.8 quality; this is **not** a confidence or safety guarantee. Monetary cost calculation is not implemented yet: cost stays unknown, even if pricing metadata is supplied. A shortlist can be more appropriate than a single candidate.
 
+With fewer than 3 repetitions per task, every eligible candidate stays on the shortlist. With at least 3 repetitions, selection uses the **lowest observed median in this run**, without a statistical superiority claim. Reports show each candidate/category's pass count, latency and reported token totals. Missing usage remains unknown.
+
+Optional `prices` metadata uses `{"as_of":"2026-09-05","input_per_million":1.0,"output_per_million":5.0}`. These example values are not provider prices. Unknown configuration fields are rejected, including inline credentials.
+
 Instructions do not change your app's active model or grant autonomous permissions. `--task` supplies prompt text, not a validated classifier. Model-produced text is never executed or promoted into exported instructions.
 
 ## Custom suites and limits
 
 Use `evaluate --suite path/to/suite.json`. The bundled [`programming.json`](src/model_guide/data/programming.json) is the format reference. Graders support exact answers and JSON subset checks. Reference answers stay out of live provider prompts.
+
+Report schema version 1 includes the task manifest, exact attempt matrix and synthetic/live provenance. Validation catches inconsistent or incomplete records; it is **not cryptographic authentication** of an externally edited report. Use reports from a trusted local run. Custom-suite authors must check answer correctness and avoid disclosing reference answers in prompts; the CLI cannot establish benchmark validity automatically.
 
 The alpha does not accept `--project`, execute generated code, upload repositories, discover account models or benchmark native Codex/Claude Code. Those concept capabilities remain [roadmap work](docs/roadmap.md).
 

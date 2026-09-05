@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 import sys
 import tempfile
@@ -36,3 +37,18 @@ class CliTest(unittest.TestCase):
             exported = self.run_cli("export", "--input", "run.json", "--format", "agents-md", "--output", "AGENTS.md", cwd=tmp)
             self.assertEqual(exported.returncode, 0, exported.stderr)
             self.assertIn("DEMONSTRATION", Path(tmp, "AGENTS.md").read_text())
+
+    def test_evaluate_collision_and_corrupted_report_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self.run_cli("init", cwd=tmp).returncode, 0)
+            result = self.run_cli("evaluate", "--output", "run.json", cwd=tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            target = Path(tmp, "run.json"); original = target.read_bytes()
+            self.assertEqual(self.run_cli("evaluate", "--output", "run.json", cwd=tmp).returncode, 2)
+            self.assertEqual(target.read_bytes(), original)
+            report = json.loads(original)
+            report["attempts"][-1] = report["attempts"][0]
+            target.write_text(json.dumps(report))
+            self.assertEqual(self.run_cli("report", "--input", "run.json", cwd=tmp).returncode, 2)
+            self.assertEqual(self.run_cli("export", "--input", "run.json", "--format", "agents-md", "--output", "bad.md", cwd=tmp).returncode, 2)
+            self.assertFalse(Path(tmp, "bad.md").exists())

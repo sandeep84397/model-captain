@@ -14,6 +14,10 @@ The alpha records provider-reported usage but does not compute monetary costs; p
 
 The included public microtasks are practice tests. They are not a private holdout, contamination-resistant benchmark or calibrated certification. Small observed differences are not proof of superiority. Even a perfect score is provisional evidence only. Architecture and autonomous implementation recommendations need stronger future task packs and validation.
 
+The run format validates the full candidate/task/repetition matrix, strict metric types and internal provenance consistency. It does not authenticate who produced an imported JSON file. A suite hash identifies recorded suite content; without the original suite it cannot independently prove the task manifest or results. Do not treat an externally edited report as trusted measurement.
+
+Below three repetitions per task, recommendations retain all candidates meeting the pilot quality threshold. At three or more repetitions, eligible candidates can be selected by the lowest observed median latency in that run. This is descriptive, not a confidence interval or evidence of statistical superiority.
+
 ## Provider controls
 
 - [OpenAI reasoning](https://developers.openai.com/api/docs/guides/reasoning): effort is model-specific; reasoning tokens are included in output usage. Incomplete outputs can still consume tokens.
