@@ -9,7 +9,7 @@ dist/
 .env
 .env.*
 !.env.example
-.model-guide/
-model-guide.json
+.model-caddie/
+model-caddie.json
 results/
 .DS_Store

@@ -1,4 +1,4 @@
-# Model Guide
+# ModelCaddie
 
 Provider-neutral model calibration and usage recommendations for programming work.
 
