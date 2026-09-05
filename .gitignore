@@ -9,8 +9,6 @@ dist/
 .env
 .env.*
 !.env.example
-.model-caddie/
-model-caddie.json
 model-guide.json
 model-captain.json
 .model-guide/
