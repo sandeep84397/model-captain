@@ -6,7 +6,7 @@ import uuid
 
 from .evaluation import (ValidationError, _identifier, _finite_number, _positive_int,
                          validate_suite, suite_hash, median_latency)
-from .native import NativeClient, NativeError
+from .native import NativeClient, NativeError, NATIVE_PROFILE
 from .recommendations import RecommendationError
 from .storage import read_json, reserve_output
 
@@ -78,7 +78,8 @@ def validate_native_report(report):
         raise ValidationError("runtime metadata must cover candidates")
     for cid, runtime in report["runtime"].items():
         _fields(runtime, ("cli_version", "auth_method", "profile"))
-        _identifier(runtime["profile"], "runtime profile")
+        if runtime["profile"] != NATIVE_PROFILE:
+            raise ValidationError("unsupported native runtime profile")
         version = runtime["cli_version"]
         if type(version) is not str or not re.fullmatch(r"[A-Za-z0-9 ._()+-]{1,128}", version):
             raise ValidationError("invalid CLI version")

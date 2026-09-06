@@ -25,6 +25,21 @@ def fixture(identity=True, repetitions=1):
 
 
 class NativeEvaluationTests(unittest.TestCase):
+    def test_unknown_profile_rejected_by_validation_recommendation_and_export(self):
+        from model_guide.cli import main
+        report = fixture()
+        report["runtime"]["medium"]["profile"] = "unknown-harness"
+        with self.assertRaises(ValidationError):
+            validate_native_report(report)
+        with self.assertRaises(RecommendationError):
+            recommend_native(report, "debugging", "fix")
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp, "run.json")
+            source.write_text(json.dumps(report))
+            output = Path(tmp, "AGENTS.md")
+            self.assertEqual(main(["export", "--input", str(source), "--format", "agents-md", "--output", str(output)]), 2)
+            self.assertFalse(output.exists())
+
     def test_failure_saves_incomplete_and_interrupt_leaves_no_report(self):
         from model_guide.cli import main
         from model_guide.native import NativeError
