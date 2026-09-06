@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0a1
+
+- Add optional 12-task experimental harder programming suite with deterministic state traces, code-review comparisons, and minimum mutation-test selection.
+- Verify answer keys using executable offline oracles; document usage and uncalibrated difficulty.
+
 ## 0.2.0a1
 
 - Local subscription evaluation through official Codex and Claude Code CLIs.

@@ -8,7 +8,7 @@
 
 A provider-neutral CLI for running a shared evaluation battery and producing scoped usage guidance. Like a captain selecting players for their roles, ModelCaptain aims to help you select models and native settings for particular kinds of work.
 
-**Status: early alpha.** The foundation includes nine public programming microtasks. These are a demonstration/pilot suite, **not a calibrated universal benchmark**. No model rankings or recommended vendor hierarchy are bundled. Real-world coding, architecture and autonomous-agent capability are not established by this suite.
+**Status: early alpha.** The foundation includes nine public programming microtasks and an optional 12-task experimental harder suite. These are a demonstration/pilot suite, **not a calibrated universal benchmark**. No model rankings or recommended vendor hierarchy are bundled. Real-world coding, architecture and autonomous-agent capability are not established by this suite.
 
 ## Why this exists
 
@@ -121,6 +121,10 @@ Native reports use schema 2 and record CLI version, subscription auth method and
 **Identity limitation:** a CLI may omit the model identity in its structured response. Such a run can show pass rates, latency and available usage, but cannot produce verified routing recommendations. Requested IDs are never substituted for observed IDs. Recommendation also requires identical CLI provider/version/profile and the same task matrix. Aliases can fail the exact identity check; prefer exact model IDs.
 
 Native effort options in this text pilot are `low`, `medium`, `high`, `xhigh`, `max`, subject to CLI/model support. Ultra orchestration is not measured here. Existing subscriptions still have their own usage limits. These local adapters are not a way to turn subscription credentials into a general API service.
+
+## Harder programming suite
+
+The optional [12-task harder suite](docs/harder-benchmark.md) adds multi-step state traces, code-review comparisons and mutation-based test selection. Every answer key has executable offline checks. Difficulty is not yet empirically calibrated; no new model ranking is claimed. Run it with `--suite src/model_guide/data/programming-hard.json`.
 
 ## Custom suites and limits
 

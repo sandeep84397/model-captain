@@ -1,0 +1,345 @@
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "hard-debug-1",
+      "category": "debugging",
+      "prompt": "Analyze a capacity-2 LRU cache. Each entry is (value, expiry). Every operation first purges expired entries. BUG: purge removes expiry < now instead of expiry <= now. put(now,key,value,ttl) removes an existing key, appends key as most recently used with expiry=now+ttl, then evicts least recently used keys until size<=2. get(now,key) returns null for absent key; otherwise moves key to most recently used and returns its value. Start empty. Run:\nput(0,\"A\",\"a\",3)\nput(1,\"B\",\"b\",5)\nget(3,\"A\")\nput(3,\"C\",\"c\",2)\nget(4,\"B\")\nget(5,\"C\")\nput(6,\"D\",\"d\",4)\nget(6,\"B\")\nReturn JSON only: {\"buggy\":{\"reads\":[all get results in order],\"keys_lru_to_mru\":[final keys]},\"fixed\":{\"reads\":[all get results in order],\"keys_lru_to_mru\":[final keys]}}. Fixed changes only the purge comparison. No wall clock or background purge.",
+      "grader": "exact",
+      "expected": {
+        "buggy": {
+          "reads": [
+            "a",
+            null,
+            "c",
+            null
+          ],
+          "keys_lru_to_mru": [
+            "D"
+          ]
+        },
+        "fixed": {
+          "reads": [
+            null,
+            "b",
+            null,
+            null
+          ],
+          "keys_lru_to_mru": [
+            "D"
+          ]
+        }
+      }
+    },
+    {
+      "id": "hard-debug-2",
+      "category": "debugging",
+      "prompt": "An optimistic store initially has values {\"x\":10,\"y\":20,\"z\":30} and per-key versions all 0. T1,T2,T3 all begin before any commits and snapshot all versions. Pending absolute writes: T1={x:11,y:19}, T2={y:25,z:25}, T3={x:12,z:28}. Commit is atomic: compare current versions to the transaction snapshot ONLY for its written keys. If ANY differs, abort with NO writes and NO version increments. Otherwise apply ALL pending writes, incrementing each written key version by 1. Commit order: T2,T1,T3. Then start fresh T1-retry with the CURRENT versions/values: its pending writes are current x+1 and current y-1, no z write. Commit it. Return JSON only with committed (IDs in commit order), aborted (IDs in abort order), values (final x,y,z object), versions (final x,y,z object). An aborted transaction is never automatically replayed.",
+      "grader": "exact",
+      "expected": {
+        "committed": [
+          "T2",
+          "T1-retry"
+        ],
+        "aborted": [
+          "T1",
+          "T3"
+        ],
+        "values": {
+          "x": 11,
+          "y": 24,
+          "z": 25
+        },
+        "versions": {
+          "x": 1,
+          "y": 2,
+          "z": 1
+        }
+      }
+    },
+    {
+      "id": "hard-debug-3",
+      "category": "debugging",
+      "prompt": "A worker has durable balance=10 and durable seen={}. On delivery, if message ID is in seen, skip it. Otherwise update balance using the operation, then durably add ID to seen. A process crash between these TWO writes leaves the balance change durable but the ID unrecorded. Restart preserves both durable objects. Deliveries in order:\na: add 5, normal\nb: multiply by 2, crash immediately after balance write, before seen write\nb: multiply by 2, normal redelivery\nc: add -4, normal\na: add 5, duplicate\nd: multiply by 3, normal\nCompare with an atomic implementation where each accepted message's balance update AND ID insertion commit together. For this atomic implementation the same crash occurs immediately AFTER that atomic commit, before acknowledging b; redelivery order is unchanged. Return JSON only {\"buggy\":{\"balance\":integer,\"seen\":[sorted IDs]},\"atomic\":{\"balance\":integer,\"seen\":[sorted IDs]}}. Acknowledgements have no other state effect.",
+      "grader": "exact",
+      "expected": {
+        "buggy": {
+          "balance": 168,
+          "seen": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ]
+        },
+        "atomic": {
+          "balance": 78,
+          "seen": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ]
+        }
+      }
+    },
+    {
+      "id": "hard-debug-4",
+      "category": "debugging",
+      "prompt": "Trace this Python weighted-path routine. Directed graph adjacency lists (order shown): A:[(B,9),(C,2)], B:[(D,2),(F,9)], C:[(B,1),(D,8),(E,3)], D:[(F,2)], E:[(D,1),(F,9)], F:[]. All weights positive.\nheap=[(0,\"A\")]; visited={\"A\"}\nwhile heap:\n    cost,node = heappop(heap)\n    if node == \"F\": return cost\n    for target,weight in graph[node]:\n        if target not in visited:\n            visited.add(target)\n            heappush(heap,(cost+weight,target))\nPython heap compares cost then node string. Return JSON only {\"actual_cost\":integer,\"optimal_cost\":integer,\"optimal_path\":[node names from A to F]}. optimal refers to the true minimum-cost directed path, not this algorithm. If equal-cost optimal paths exist, choose the lexicographically smallest node-name list. No graph edges beyond those listed.",
+      "grader": "exact",
+      "expected": {
+        "actual_cost": 14,
+        "optimal_cost": 7,
+        "optimal_path": [
+          "A",
+          "C",
+          "B",
+          "D",
+          "F"
+        ]
+      }
+    },
+    {
+      "id": "hard-review-1",
+      "category": "code-review",
+      "prompt": "Toy authorization semantics only. A request is allowed exactly when active is true, tenant_match is true, and role is owner or editor. Evaluate these candidate predicates over every combination of active in [false,true], tenant_match in [false,true], and role in canonical order [owner,editor,viewer]: P = active and tenant_match and role in {owner,editor}; Q = active and (tenant_match or role in {owner,editor}); R = active and tenant_match and (role == owner or role == editor). Return JSON only: equivalent_to_spec (array of candidate names in candidate order), q_false_positive_vectors (array in enumeration order active, then tenant_match, then role; encode each as 'active=<bool>,tenant_match=<bool>,role=<role>'), and vector_count (integer). No real authorization policy applies.",
+      "grader": "exact",
+      "expected": {
+        "equivalent_to_spec": [
+          "P",
+          "R"
+        ],
+        "q_false_positive_vectors": [
+          "active=true,tenant_match=false,role=owner",
+          "active=true,tenant_match=false,role=editor",
+          "active=true,tenant_match=true,role=viewer"
+        ],
+        "vector_count": 12
+      }
+    },
+    {
+      "id": "hard-review-2",
+      "category": "code-review",
+      "prompt": "Toy cache semantics only: a lookup is isolated by the ordered string pair (tenant,user). Compare two cache keys: string_key(tenant,user) = tenant + ':' + user, and tuple_key(tenant,user) = (tenant,user). Backend values are {('north:west','7'):'A', ('north','west:7'):'B', ('north','7'):'C'}. Calls in order are ('north:west','7'), ('north','west:7'), ('north','7'). Each cache returns the backend value on its first key miss, otherwise its cached value. Return JSON only: string_key_returns (array), tuple_key_returns (array), mismatched_call_indexes (zero-based array), and collision_key (string). Do not assume escaping or external cache behavior.",
+      "grader": "exact",
+      "expected": {
+        "string_key_returns": [
+          "A",
+          "A",
+          "C"
+        ],
+        "tuple_key_returns": [
+          "A",
+          "B",
+          "C"
+        ],
+        "mismatched_call_indexes": [
+          1
+        ],
+        "collision_key": "north:west:7"
+      }
+    },
+    {
+      "id": "hard-review-3",
+      "category": "code-review",
+      "prompt": "Toy compare-and-swap semantics only. A commit of observed_balance, observed_version, amount is permitted when the implementation condition is true and observed_balance >= amount; on commit it writes observed_balance-amount and increments state.version. Initial state is {balance:10,version:0}; each withdrawal amount is 7. Compare buggy condition state.version >= observed_version with fixed condition state.version == observed_version. Interleaving stale: T1 and T2 both read (10,0), then commit T1 then T2. Interleaving fresh: T1 reads and commits first; then T2 reads the resulting state and attempts its withdrawal. Return JSON only: buggy_stale, fixed_stale, buggy_fresh, fixed_fresh. Each value is an object with canonical keys commits (array), balance (integer), version (integer). Do not infer overdraft behavior beyond this toy rule.",
+      "grader": "exact",
+      "expected": {
+        "buggy_stale": {
+          "commits": [
+            "T1",
+            "T2"
+          ],
+          "balance": 3,
+          "version": 2
+        },
+        "fixed_stale": {
+          "commits": [
+            "T1"
+          ],
+          "balance": 3,
+          "version": 1
+        },
+        "buggy_fresh": {
+          "commits": [
+            "T1"
+          ],
+          "balance": 3,
+          "version": 1
+        },
+        "fixed_fresh": {
+          "commits": [
+            "T1"
+          ],
+          "balance": 3,
+          "version": 1
+        }
+      }
+    },
+    {
+      "id": "hard-review-4",
+      "category": "code-review",
+      "prompt": "Toy path semantics only. A raw path is accepted by spec exactly when every slash-separated raw component is nonempty and neither '.' nor '..'; accepted output is the unchanged raw path. Inputs in canonical order: 'docs/readme', 'docs/../secret', 'docs//readme', './docs', '../secret'. Compare A: validate raw components first, then join unchanged components. Compare B: first normalize by dropping '' and '.', popping one previous component for '..' when present (otherwise dropping '..'), then validate the normalized components using the same rule. Return JSON only: accepted_by_spec (array), accepted_by_A (array), accepted_by_B (array), and b_false_positives (array), each in input order. No percent decoding, filesystem, symlinks, or platform behavior exists.",
+      "grader": "exact",
+      "expected": {
+        "accepted_by_spec": [
+          "docs/readme"
+        ],
+        "accepted_by_A": [
+          "docs/readme"
+        ],
+        "accepted_by_B": [
+          "docs/readme",
+          "docs/../secret",
+          "docs//readme",
+          "./docs",
+          "../secret"
+        ],
+        "b_false_positives": [
+          "docs/../secret",
+          "docs//readme",
+          "./docs",
+          "../secret"
+        ]
+      }
+    },
+    {
+      "id": "hard-test-1",
+      "category": "testing",
+      "prompt": "Half-open interval overlap, args (a,b,c,d). Reference:\na < b and c < d and max(a,c) < min(b,d)\nMutants:\nM1: a < b and c < d and max(a,c) <= min(b,d)\nM2: max(min(a,b),min(c,d)) < min(max(a,b),max(c,d))\nM3: a < b and c < d and ((a <= c and d <= b) or (c <= a and b <= d))\nM4: reference(a,b,c,d) and (a,b) != (c,d)\nCandidate tests:\nA=(0,2,2,4); B=(0,4,1,3); C=(0,3,2,5); D=(3,0,1,2); E=(0,2,0,2); F=(1,1,0,2).\nFor each candidate test, list all mutants whose return value differs from the reference. Each mutant is independent (not combined). Also choose a smallest-cardinality subset of candidate tests killing EVERY mutant. Break ties by the lexicographically smallest sorted candidate-ID list. Return JSON only {\"killed\":{\"A\":[sorted mutant IDs],... all candidate IDs including empty lists},\"minimum_tests\":[sorted chosen candidate IDs]}. Use Python semantics. No code execution/tools are required; derive the results.",
+      "grader": "exact",
+      "expected": {
+        "killed": {
+          "A": [
+            "M1"
+          ],
+          "B": [],
+          "C": [
+            "M3"
+          ],
+          "D": [
+            "M2"
+          ],
+          "E": [
+            "M4"
+          ],
+          "F": []
+        },
+        "minimum_tests": [
+          "A",
+          "C",
+          "D",
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "hard-test-2",
+      "category": "testing",
+      "prompt": "Capped exponential backoff, integer args (b,n,c) = base, attempt index, cap. Reference: min(c,b*2**n). Attempt index starts at 0. Mutants:\nM1: min(c,b*2**(n+1))\nM2: min(c,b*(n+1))\nM3: min(c,b)*2**n\nM4: c\nCandidate tests:\nA=(1,0,8); B=(1,1,8); C=(1,2,8); D=(3,2,8); E=(9,0,8); F=(2,3,8).\nFor each candidate test, list all mutants whose return value differs from the reference. Each mutant is independent (not combined). Also choose a smallest-cardinality subset of candidate tests killing EVERY mutant. Break ties by the lexicographically smallest sorted candidate-ID list. Return JSON only {\"killed\":{\"A\":[sorted mutant IDs],... all candidate IDs including empty lists},\"minimum_tests\":[sorted chosen candidate IDs]}. Use Python semantics. No code execution/tools are required; derive the results.",
+      "grader": "exact",
+      "expected": {
+        "killed": {
+          "A": [
+            "M1",
+            "M4"
+          ],
+          "B": [
+            "M1",
+            "M4"
+          ],
+          "C": [
+            "M1",
+            "M2",
+            "M4"
+          ],
+          "D": [
+            "M3"
+          ],
+          "E": [],
+          "F": [
+            "M3"
+          ]
+        },
+        "minimum_tests": [
+          "C",
+          "D"
+        ]
+      }
+    },
+    {
+      "id": "hard-test-3",
+      "category": "testing",
+      "prompt": "Keyset pagination. Fixed rows R=[(1,\"b\"),(2,\"a\"),(1,\"a\"),(3,\"a\"),(2,\"c\")]. Each row is (timestamp,id); Python tuple comparisons are lexicographic. Args c,n = cursor, limit. None means no cursor. Reference: [r for r in sorted(R) if c is None or r > c][:n]. Mutants:\nM1: [r for r in sorted(R) if c is None or r[0] > c[0]][:n]\nM2: [r for r in sorted(R) if c is None or r >= c][:n]\nM3: [r for r in sorted(R)[:n] if c is None or r > c]\nM4: [r for r in sorted(R,key=lambda r:(r[1],r[0])) if c is None or r > c][:n]\nCandidate tests:\nA=(None,2); B=((1,\"a\"),2); C=((1,\"b\"),2); D=((2,\"a\"),1); E=((3,\"a\"),2).\nFor each candidate test, list all mutants whose return value differs from the reference. Each mutant is independent (not combined). Also choose a smallest-cardinality subset of candidate tests killing EVERY mutant. Break ties by the lexicographically smallest sorted candidate-ID list. Return JSON only {\"killed\":{\"A\":[sorted mutant IDs],... all candidate IDs including empty lists},\"minimum_tests\":[sorted chosen candidate IDs]}. Use Python semantics. No code execution/tools are required; derive the results.",
+      "grader": "exact",
+      "expected": {
+        "killed": {
+          "A": [
+            "M4"
+          ],
+          "B": [
+            "M1",
+            "M2",
+            "M3",
+            "M4"
+          ],
+          "C": [
+            "M2",
+            "M3",
+            "M4"
+          ],
+          "D": [
+            "M1",
+            "M2",
+            "M3",
+            "M4"
+          ],
+          "E": [
+            "M2"
+          ]
+        },
+        "minimum_tests": [
+          "B"
+        ]
+      }
+    },
+    {
+      "id": "hard-test-4",
+      "category": "testing",
+      "prompt": "Deduplication of integer lists. Reference returns each distinct element once in FIRST-occurrence order. Mutants:\nM1: return sorted distinct elements.\nM2: return each distinct element once in LAST-occurrence order (sort unique elements by the index of their final occurrence).\nM3: return only elements occurring exactly once in the entire input, preserving their order.\nM4: remove only adjacent repeats: return [x for i,x in enumerate(xs) if i==0 or x!=xs[i-1]].\nCandidate lists:\nA=[2,1,2]; B=[1,1,2]; C=[3,2,1]; D=[2,1,1,2]; E=[]; F=[1,2,1,3,2].\nFor each candidate test, list all mutants whose return value differs from the reference. Each mutant is independent (not combined). Also choose a smallest-cardinality subset of candidate tests killing EVERY mutant. Break ties by the lexicographically smallest sorted candidate-ID list. Return JSON only {\"killed\":{\"A\":[sorted mutant IDs],... all candidate IDs including empty lists},\"minimum_tests\":[sorted chosen candidate IDs]}. Use Python semantics. No code execution/tools are required; derive the results.",
+      "grader": "exact",
+      "expected": {
+        "killed": {
+          "A": [
+            "M1",
+            "M2",
+            "M3",
+            "M4"
+          ],
+          "B": [
+            "M3"
+          ],
+          "C": [
+            "M1"
+          ],
+          "D": [
+            "M1",
+            "M2",
+            "M3",
+            "M4"
+          ],
+          "E": [],
+          "F": [
+            "M2",
+            "M3",
+            "M4"
+          ]
+        },
+        "minimum_tests": [
+          "A"
+        ]
+      }
+    }
+  ]
+}

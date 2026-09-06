@@ -32,6 +32,9 @@ jobs:
           model-captain init
           model-captain evaluate --provider demo --output results/demo.json
           model-captain report --input results/demo.json
+          python -c "from importlib.resources import files; from pathlib import Path; Path('hard-suite.json').write_text(files('model_guide.data').joinpath('programming-hard.json').read_text())"
+          model-captain evaluate --provider demo --suite hard-suite.json --output results/hard-demo.json
+          python -c "import json; r=json.load(open('results/hard-demo.json')); assert r['mode']=='synthetic' and len(r['attempts'])==12 and all(a['passed'] for a in r['attempts'])"
           model-captain export --input results/demo.json --format agents-md --output results/AGENTS.md
           model-captain export --input results/demo.json --format claude-md --output results/CLAUDE.md
           set +e
