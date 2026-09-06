@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "candidates": [
+    {"id": "codex-medium", "provider": "codex-cli", "model": "YOUR_EXACT_CODEX_MODEL_ID", "effort": "medium", "timeout_seconds": 120},
+    {"id": "codex-high", "provider": "codex-cli", "model": "YOUR_EXACT_CODEX_MODEL_ID", "effort": "high", "timeout_seconds": 120},
+    {"id": "claude-medium", "provider": "claude-cli", "model": "YOUR_EXACT_CLAUDE_MODEL_ID", "effort": "medium", "timeout_seconds": 120}
+  ]
+}

@@ -7,6 +7,8 @@ from .evaluation import ValidationError, build_report, grade, validate_suite, va
 from .recommendations import RecommendationError, recommend
 from .providers import AnthropicProvider, OpenAIProvider, ProviderError, StdlibTransport
 from .storage import StorageError, atomic_json, atomic_text, read_json, reserve_output
+from .native import NativeError
+from .native_evaluation import command_evaluate_native, validate_native_report, recommend_native
 
 def bundled_suite(): return json.loads(files("model_guide.data").joinpath("programming.json").read_text())
 def _demo_output(task): return json.dumps(task["expected"], separators=(",",":"))
@@ -64,8 +66,15 @@ def command_evaluate(args):
         output.write_json(report)
     print(f"{mode} complete: {calls} calls; cost unknown")
 def command_report(args):
-    r=validate_report(read_json(args.input)); attempts=r["attempts"]
+    r=_validated_report(args.input); attempts=r["attempts"]
     print(f"run {r.get('run_id')} {r.get('completion_status')} {r.get('mode')}; attempts {len(attempts)}; cost unknown")
+    if r["schema_version"] == 2:
+        print("track native-cli: CLI startup/context included; token ceiling and internal retries unknown")
+        for candidate in r["candidates"]:
+            rows = [a for a in attempts if a["candidate_id"] == candidate["id"]]
+            matched = sum(a["returned_model"] == candidate["model"] for a in rows)
+            runtime = r["runtime"][candidate["id"]]
+            print(f"{candidate['id']}: {runtime['cli_version']}; auth={runtime['auth_method']}; profile={runtime['profile']}; matching observed identity {matched}/{len(rows)}")
     for candidate in r["candidates"]:
         for category in sorted({t["category"] for t in r["tasks"]}):
             rows = [a for a in attempts if a["candidate_id"] == candidate["id"] and a["category"] == category]
@@ -75,17 +84,28 @@ def command_report(args):
                 tokens.append("unknown" if any(a[field] is None for a in rows) else str(sum(a[field] for a in rows)))
             print(f"{candidate['id']} / {category}: passed {sum(a['passed'] for a in rows)}/{len(rows)}; "
                   f"median {median_latency(a['latency_ms'] for a in rows):.3f} ms; input/output tokens {tokens[0]}/{tokens[1]}")
-def command_recommend(args): print(json.dumps(recommend(read_json(args.input),args.category,args.task),indent=2,allow_nan=False))
+def _validated_report(path):
+    report = read_json(path)
+    return validate_native_report(report) if isinstance(report, dict) and report.get("schema_version") == 2 else validate_report(report)
+
+def _recommend(report, category, task):
+    return recommend_native(report, category, task) if report["schema_version"] == 2 else recommend(report, category, task)
+
+def command_recommend(args): print(json.dumps(_recommend(_validated_report(args.input),args.category,args.task),indent=2,allow_nan=False))
 def command_export(args):
-    r=validate_report(read_json(args.input))
+    r=_validated_report(args.input)
     demo="DEMONSTRATION ONLY. " if r.get("mode")=="synthetic" else ""
     content=f"# {DISPLAY_NAME} guidance\n\n{demo}Microtask screening is provisional only. It is not validated full-programming routing. Guidance applies only to tested categories, tasks, and configurations. It grants no autonomous responsibility and makes no universal or provider-wide ranking. Native effort is selected only from the tested candidate configuration; no effort mapping occurs across providers.\n"
     content += (f"\nSource run: {r['run_id']}; mode: {r['mode']}; provenance: {r['provenance']['kind']}.\n"
                 f"Suite version: {r['suite_version']}; SHA-256: {r['suite_hash']}.\n")
+    if r["schema_version"] == 2:
+        content += "\nTrack: native-cli. CLI version, host context, startup and native tool behavior affect results. Do not equate this run with a direct API evaluation. Unknown observed model identity cannot justify routing.\n"
+        for cid, runtime in r["runtime"].items():
+            content += f"\nRuntime {cid}: " + json.dumps(runtime, sort_keys=True) + "\n"
     if not demo:
         for category in sorted({t["category"] for t in r["tasks"]}):
             try:
-                advice = recommend(r, category, "Follow the user's task requirements.")
+                advice = _recommend(r, category, "Follow the user's task requirements.")
                 content += f"\n## {category}\n\nProvisional candidates: {', '.join(advice['shortlist'])}. Basis: {advice['selection_basis']}.\n"
                 for evidence in advice["evidence"]:
                     if evidence["candidate_id"] in advice["shortlist"]:
@@ -99,6 +119,12 @@ def parser():
     p=argparse.ArgumentParser(prog="model-captain",description=DISPLAY_NAME); sub=p.add_subparsers(dest="command",required=True)
     x=sub.add_parser("init"); x.add_argument("--config",default="model-guide.json"); x.set_defaults(fn=command_init)
     x=sub.add_parser("evaluate"); x.add_argument("--provider",choices=("demo","openai","anthropic","all"),default="demo"); x.add_argument("--config",default="model-guide.json"); x.add_argument("--suite"); x.add_argument("--output",required=True); x.add_argument("--repetitions",type=int,default=1); x.add_argument("--max-requests",type=int,default=12); x.add_argument("--live",action="store_true"); x.add_argument("--force",action="store_true"); x.set_defaults(fn=command_evaluate)
+    x=sub.add_parser("evaluate-native", help="Evaluate through subscription-authenticated official CLIs")
+    x.add_argument("--provider", required=True, choices=("codex-cli", "claude-cli"))
+    x.add_argument("--config", required=True); x.add_argument("--suite"); x.add_argument("--output", required=True)
+    x.add_argument("--repetitions", type=int, default=1); x.add_argument("--max-requests", type=int, default=12)
+    x.add_argument("--live", action="store_true"); x.add_argument("--force", action="store_true")
+    x.set_defaults(fn=command_evaluate_native)
     for name,fn in (("report",command_report),("recommend",command_recommend),("export",command_export)):
       x=sub.add_parser(name); x.add_argument("--input",required=True); x.set_defaults(fn=fn)
       if name=="recommend": x.add_argument("--category",required=True); x.add_argument("--task",required=True)
@@ -106,6 +132,6 @@ def parser():
     return p
 def main(argv=None):
     try: args=parser().parse_args(argv); args.fn(args); return 0
-    except (ValidationError, StorageError, RecommendationError) as exc: print(f"error: {exc}",file=sys.stderr); return 2
+    except (ValidationError, StorageError, RecommendationError, NativeError) as exc: print(f"error: {exc}",file=sys.stderr); return 2
     except KeyboardInterrupt: print("error: interrupted; no completed report written", file=sys.stderr); return 2
 if __name__ == "__main__": raise SystemExit(main())

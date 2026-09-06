@@ -6,6 +6,8 @@ Installable CLI; offline demonstration; explicit OpenAI/Anthropic candidate conf
 
 ## Next: stronger evidence
 
+Subscription CLI text pilots are now available through `evaluate-native`; full repository-agent evaluation remains below.
+
 - Separate development tasks from protected holdout evaluation.
 - Repeated, randomized comparisons with uncertainty accounting for related tasks.
 - Dated pricing and billing-aware usage normalization, cache details, failed-call accounting.
@@ -16,7 +18,7 @@ Installable CLI; offline demonstration; explicit OpenAI/Anthropic candidate conf
 ## Next: real programming workflows
 
 - Isolated containers for repository tasks and independent patch/test grading.
-- Native Codex and Claude Code integration, with exact tool/runtime configurations.
+- Extend native Codex and Claude Code text adapters to controlled repository workflows, with exact tool/runtime configurations.
 - Human-calibrated assessment for architecture and ambiguous review work.
 - Policies for task escalation and measurable improvement after retries.
 

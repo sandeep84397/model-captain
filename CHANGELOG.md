@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0a1
+
+- Local subscription evaluation through official Codex and Claude Code CLIs.
+- Separate native report schema, CLI version/auth/profile metadata and explicit unknown model identity.
+- Native config validation, invocation limits, timeout/failure handling and no API fallback.
+- Shared report/recommend/export commands preserve track and evidence provenance.
+- Text-only pilot; no assertion of API/native equivalence, hard token ceilings or dollar costs.
+
 ## 0.1.0a1
 
 Initial public alpha.

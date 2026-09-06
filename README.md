@@ -48,6 +48,8 @@ Demo recommendation intentionally returns exit code **2** with demonstration-onl
 
 ## Evaluate configured API models
 
+For existing Codex/Claude Code subscriptions, see [subscription CLI evaluation](#evaluate-through-your-existing-subscription). The `evaluate` command below remains the direct API track.
+
 Replace starter `replace-me` model IDs in `model-guide.json` with exact IDs available to your account. Add separate candidates to compare native effort settings. Support varies by model; the provider remains the authority on compatibility. Ultra orchestration is not an API effort setting.
 
 ```json
@@ -92,13 +94,41 @@ Optional `prices` metadata uses `{"as_of":"2026-09-05","input_per_million":1.0,"
 
 Instructions do not change your app's active model or grant autonomous permissions. `--task` supplies prompt text, not a validated classifier. Model-produced text is never executed or promoted into exported instructions.
 
+## Evaluate through your existing subscription
+
+Install the official Codex or Claude Code CLI and sign in there with your eligible subscription. ModelCaptain reuses that login locally; it does not read/copy credential files or accept subscription tokens. No separate API key is required for this track. API/billing environment overrides or an unverified login are rejected, never silently switched.
+
+Copy [`examples/native-config.json`](examples/native-config.json), replace model IDs with IDs your CLI supports, and run:
+
+```sh
+# Two Codex configurations × nine tasks = 18 CLI invocations.
+model-captain evaluate-native --provider codex-cli --config native-config.json --live --max-requests 18 --output results/codex.json
+
+# One Claude configuration × nine tasks = nine CLI invocations.
+model-captain evaluate-native --provider claude-cli --config native-config.json --live --output results/claude.json
+
+model-captain report --input results/codex.json
+model-captain recommend --input results/codex.json --category debugging --task "Diagnose a bug"
+model-captain export --input results/codex.json --format agents-md --output results/NATIVE-AGENTS.md
+```
+
+These are real subscription-consuming runs. `max-requests` bounds **CLI invocations**, not the CLI's internal requests/retries. Each invocation has a configurable timeout; output-token ceiling and dollar cost remain unknown. ModelCaptain does not retry or request fallback models. First CLI failure stops the run and saves an incomplete report. Interruptions leave no new completed report.
+
+Every task uses a fresh temporary directory and only the problem prompt. The text pilot restricts model tools and preserves normal host security controls. Host instructions, hooks, CLI startup and native context can still affect results. This is not yet repository-editing or autonomous-agent benchmarking.
+
+Native reports use schema 2 and record CLI version, subscription auth method and invocation profile. API/demo schema 1 remains supported. The interfaces are not assumed equivalent. No API/native rankings are merged.
+
+**Identity limitation:** a CLI may omit the model identity in its structured response. Such a run can show pass rates, latency and available usage, but cannot produce verified routing recommendations. Requested IDs are never substituted for observed IDs. Recommendation also requires identical CLI provider/version/profile and the same task matrix. Aliases can fail the exact identity check; prefer exact model IDs.
+
+Native effort options in this text pilot are `low`, `medium`, `high`, `xhigh`, `max`, subject to CLI/model support. Ultra orchestration is not measured here. Existing subscriptions still have their own usage limits. These local adapters are not a way to turn subscription credentials into a general API service.
+
 ## Custom suites and limits
 
 Use `evaluate --suite path/to/suite.json`. The bundled [`programming.json`](src/model_guide/data/programming.json) is the format reference. Graders support exact answers and JSON subset checks. Reference answers stay out of live provider prompts.
 
 Report schema version 1 includes the task manifest, exact attempt matrix and synthetic/live provenance. Validation catches inconsistent or incomplete records; it is **not cryptographic authentication** of an externally edited report. Use reports from a trusted local run. Custom-suite authors must check answer correctness and avoid disclosing reference answers in prompts; the CLI cannot establish benchmark validity automatically.
 
-The alpha does not accept `--project`, execute generated code, upload repositories, discover account models or benchmark native Codex/Claude Code. Those concept capabilities remain [roadmap work](docs/roadmap.md).
+The alpha does not accept `--project`, execute generated code, upload repositories or discover account models. Native adapters currently measure text microtasks only. Repository-level agent evaluation remains [roadmap work](docs/roadmap.md).
 
 ## Development
 

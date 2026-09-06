@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "model-captain"
-version = "0.1.0a1"
+version = "0.2.0a1"
 description = "Provider-neutral model evaluation and evidence-based usage guidance"
 readme = "README.md"
 requires-python = ">=3.11"
