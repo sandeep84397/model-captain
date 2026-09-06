@@ -6,6 +6,7 @@ This module deliberately does not read credential files or fall back to APIs.
 from dataclasses import dataclass
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import signal
@@ -15,13 +16,15 @@ import time
 
 
 _MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}\Z")
+NATIVE_PROFILE = "native-text-v1"
 _OVERRIDES = {
     "codex-cli": {
         "OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN", "OPENAI_BASE_URL",
     },
     "claude-cli": {
         "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
-        "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
+        "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+        "CLAUDE_CODE_USE_FOUNDRY",
     },
 }
 _FORBIDDEN_EVENT_TYPES = {
@@ -114,23 +117,44 @@ class NativeClient:
 
     @staticmethod
     def _stop_process(process):
-        if process.poll() is not None:
-            return
         if os.name == "posix":
-            os.killpg(process.pid, signal.SIGTERM)
+            NativeClient._signal_group(process.pid, signal.SIGTERM)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if not NativeClient._group_exists(process.pid):
+                    break
+                time.sleep(0.05)
+            if NativeClient._group_exists(process.pid):
+                NativeClient._signal_group(process.pid, signal.SIGKILL)
         else:
-            process.terminate()
-        try:
-            process.communicate(timeout=5)
-        except BaseException:
-            if os.name == "posix":
-                os.killpg(process.pid, signal.SIGKILL)
-            else:
-                process.kill()
             try:
-                process.communicate()
+                process.terminate()
+                process.communicate(timeout=5)
             except BaseException:
-                pass
+                try:
+                    process.kill()
+                    process.communicate()
+                except BaseException:
+                    pass
+        try:
+            process.communicate(timeout=1)
+        except BaseException:
+            pass
+
+    @staticmethod
+    def _signal_group(pid, signal_number):
+        try:
+            os.killpg(pid, signal_number)
+        except (ProcessLookupError, OSError):
+            pass
+
+    @staticmethod
+    def _group_exists(pid):
+        try:
+            os.killpg(pid, 0)
+        except (ProcessLookupError, OSError):
+            return False
+        return True
 
     def _check_overrides(self):
         if any(self.environ.get(name) for name in _OVERRIDES[self.provider]):
@@ -156,14 +180,16 @@ class NativeClient:
             code, stdout, _ = self._run(["claude", "auth", "status", "--json"])
             try:
                 auth = json.loads(stdout)
+                if not isinstance(auth, dict):
+                    raise ValueError("auth")
                 accepted = auth.get("authMethod") in {"claude.ai", "oauth", "subscription"}
                 subscription = auth.get("subscriptionType") in {"pro", "max", "team", "enterprise"}
                 if code != 0 or auth.get("loggedIn") is not True or not accepted or auth.get("apiProvider") != "firstParty" or not subscription:
                     raise ValueError("auth")
-            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            except (AttributeError, TypeError, ValueError, RecursionError, json.JSONDecodeError) as exc:
                 raise NativeError("unsupported native authentication") from exc
             method = "claude-subscription"
-        return {"cli_version": version, "auth_method": method, "profile": "native-text-v1"}
+        return {"cli_version": version, "auth_method": method, "profile": NATIVE_PROFILE}
 
     def _help_argv(self):
         return ["codex", "exec", "--help"] if self.provider == "codex-cli" else ["claude", "--help"]
@@ -188,10 +214,13 @@ class NativeClient:
         model = candidate.get("model")
         if not isinstance(model, str) or not _MODEL_ID.fullmatch(model):
             raise NativeError("invalid native model")
-        with tempfile.TemporaryDirectory(prefix="model-captain-native-") as cwd:
+        cwd = self._new_task_directory()
+        try:
             started = time.monotonic()
             code, stdout, _ = self._run(self._argv(candidate, cwd), prompt, cwd, timeout)
             _ = time.monotonic() - started
+        finally:
+            shutil.rmtree(cwd, ignore_errors=True)
         if code != 0:
             raise NativeError("native CLI failed")
         try:
@@ -200,6 +229,32 @@ class NativeClient:
             raise
         except (AttributeError, TypeError, ValueError, KeyError, UnicodeError, RecursionError, OverflowError, json.JSONDecodeError) as exc:
             raise NativeError("invalid native response") from exc
+
+    @staticmethod
+    def _new_task_directory():
+        cwd = Path.cwd().resolve()
+        directory = tempfile.mkdtemp(prefix="model-captain-native-")
+        resolved = Path(directory).resolve()
+        root = NativeClient._git_root(cwd)
+        if NativeClient._within(resolved, cwd) or (root is not None and NativeClient._within(resolved, root)):
+            shutil.rmtree(directory, ignore_errors=True)
+            raise NativeError("native temporary directory is unsafe")
+        return directory
+
+    @staticmethod
+    def _git_root(cwd):
+        for parent in (cwd, *cwd.parents):
+            if (parent / ".git").exists():
+                return parent
+        return None
+
+    @staticmethod
+    def _within(path, root):
+        try:
+            path.relative_to(root)
+        except ValueError:
+            return False
+        return True
 
     def _argv(self, candidate, cwd):
         effort = candidate.get("effort")
