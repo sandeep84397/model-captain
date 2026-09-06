@@ -44,6 +44,8 @@ class NativeClientTest(unittest.TestCase):
         self.assertIn("read-only", argv)
         self.assertNotIn("--ask-for-approval", argv)
         self.assertIn('approval_policy="never"', argv)
+        self.assertIn('model_provider="openai"', argv)
+        self.assertIn('forced_login_method="chatgpt"', argv)
         self.assertIn('tools.shell_tool=false', argv)
         self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", argv)
         self.assertNotEqual(cwd, ".")
