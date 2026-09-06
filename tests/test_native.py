@@ -171,6 +171,7 @@ class NativeClientTest(unittest.TestCase):
                 "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); time.sleep(30)"
             )
             client = NativeClient("codex-cli", environ={})
+            client.command = sys.executable
             with self.assertRaisesRegex(NativeError, "^native CLI timed out$"):
                 client._run([sys.executable, "-c", code, pid_path, marker_path], timeout=0.1)
             time.sleep(0.7)
