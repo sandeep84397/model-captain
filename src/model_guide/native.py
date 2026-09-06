@@ -210,7 +210,7 @@ class NativeClient:
                 "codex", "exec", "--json", "--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only",
                 "--disable", "apps", "--disable", "multi_agent", "-c", 'approval_policy="never"',
                 "-c", 'model_provider="openai"', "-c", 'forced_login_method="chatgpt"',
-                "-c", "tools.shell_tool=false", "-c", 'web_search="disabled"', "-m", candidate["model"], "-C", cwd,
+                "-c", "features.shell_tool=false", "-c", 'web_search="disabled"', "-m", candidate["model"], "-C", cwd,
             ]
             if effort:
                 argv.extend(["-c", f'model_reasoning_effort="{effort}"'])
